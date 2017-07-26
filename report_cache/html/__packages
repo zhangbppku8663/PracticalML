@@ -1,0 +1,7 @@
+base
+data.table
+lattice
+ggplot2
+caret
+randomForest
+dplyr
