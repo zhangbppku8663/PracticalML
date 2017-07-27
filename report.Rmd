@@ -1,7 +1,7 @@
 ---
 title: "PracticalML_project"
 author: "Eric Zhang"
-date: "July 23, 2017"
+date: "July 27, 2017"
 output: html_document
 ---
 
@@ -11,11 +11,11 @@ In this project, we are going to use data from accelerometers on the belt, forea
 
 
 ## Data preparation and clean up
-```{r}
+```{r, message=FALSE, warning=FALSE}
 library(data.table)
-library(caret)
 library(randomForest)
 library(dplyr)
+library(rfUtilities)
 training <- read.table("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", sep = ',', header=T)
 training <- tbl_df(training)
 ```
@@ -42,28 +42,18 @@ acc_train <- select(acc_train, -one_of(acc_ind2))
 
 ## Model building and cross validation
 
-Firstly, a 5-fold cross validation has been conducted on the training set.
+Firstly, a 5-fold cross validation has been conducted on the training set. In order to accelarate the model building and cross-validation process, I used package "rfUtilities" by Jeffrey S. Evans and Melanie A. Murphy.
+Advantages include fast model buidling, because usage of 'randomForest' directly instead of 'caret::train'; also, cross-validation is easier to conduct and plot.
 
-*(In order to increase the efficiency (yes, 19662 observations take some time to train), I also tried spitting the training set into training (75%) and validation (25%) only. No cross-validation is implemented. Training part will be used to do model building and validation for validation. randomForest is used because it is significantly faster than the method in caret)*
 
-```{r, cache=TRUE}
-cv_control <- trainControl(method='cv', 5)
-rf_model <- train(classe ~ ., data=acc_train, method='rf',
-                  troControl=cv_control, ntree=100)
-rf_model
-# in the comments, a training, validation split will be more efficient
-#smp_size <- floor(0.75 * nrow(acc_train))
-#set.seed(123)
-#train_ind <- sample(seq_len(nrow(acc_train)), size = smp_size)
-#training <- acc_train[train_ind, ]
-#validation <- acc_train[-train_ind, ]
-#rf_model <- randomForest(factor(classe)~ ., data=training)
-#pred <- predict(rf_model, validation)
-#confusionMatrix(pred, validation$classe)
+```{r, echo=TRUE}
+rf.model <- randomForest(factor(classe) ~ ., data=acc_train, ntree=100)
+rf.cv <- rf.crossValidation(rf.model, acc_train, p=0.20, n=5, seed=41, ntree=100)
+print(rf.cv)
 
 ```
 
-As seen from the summary of the random forest model on the validation data, the model is very successful and resulted in an accuracy over 99.5%.
+As seen from the summary of the random forest model on the validation data, the model is very successful and resulted in an accuracy 100% in the cross validation test.
 
 ## Prediction on the test data set
 
@@ -75,17 +65,20 @@ count2 <- sapply(test, fun)
 complete_test <- test[,count2<1]
 acc_ind <- grep("arm|dumbbell|forearm|belt", names(complete_test), value=T)
 acc_test <- select(complete_test, acc_ind)
-# notice there is a "problem_id" column in the test data
+
+results <- predict(rf.model, acc_test)
+results
 ```
 
 ## Appendix: Figures
 
-```{r opts, echo=FALSE}
-knitr::opts_chunk$set(fig.path = "figures/")
+```{r, echo=FALSE, include=TRUE, fig.path="figures/"}
+
 # plot the error rates of the model
-plot(rf_model, log = 'y')
+plot(rf.model, log = 'y')
+legend("topright", legend=unique(acc_train$classe), col=unique(as.numeric(acc_train$classe)), pch=19)
 
 # plot the feature importance
-varImp(rf_model)
+varImpPlot(rf.model)
 ```
 
