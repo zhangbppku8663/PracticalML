@@ -1,0 +1,84 @@
+---
+title: "PracticalML_project"
+author: "Eric Zhang"
+date: "July 27, 2017"
+output: html_document
+---
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+In this project, we are going to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+
+## Data preparation and clean up
+```{r, message=FALSE, warning=FALSE}
+library(data.table)
+library(randomForest)
+library(dplyr)
+library(rfUtilities)
+training <- read.table("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", sep = ',', header=T)
+training <- tbl_df(training)
+```
+
+
+Cleaning dataset follows two criteria:
+1. Missing data is not going to fit in the model. Therefore, any column with missing data will be excluded.
+2. As indicated in the introduction part, only data from accelerometers on the belt, forearm, arm, and dumbell are used for machine learning.
+
+In the practice, all columns with names implying they are statistics or not related to accelerometers are excluded.
+
+```{r}
+# we do not need columns with many missing data
+fun <- function(x){sum(is.na(x))}
+count <- sapply(training, fun)
+complete <- training[, count<1]
+
+# get accelarator related columns and use them plut 'classe' to get the train dataset
+acc_ind <- grep("arm|dumbbell|forearm|belt", names(complete),value = T)
+acc_train <- select(complete, acc_ind, classe)
+acc_ind2 <- grep("kurtosis|skewness|amplitude|max|min", names(acc_train), value = T)
+acc_train <- select(acc_train, -one_of(acc_ind2))
+```
+
+## Model building and cross validation
+
+Firstly, a 5-fold cross validation has been conducted on the training set. In order to accelarate the model building and cross-validation process, I used package "rfUtilities" by Jeffrey S. Evans and Melanie A. Murphy.
+Advantages include fast model buidling, because usage of 'randomForest' directly instead of 'caret::train'; also, cross-validation is easier to conduct and plot.
+
+
+```{r, echo=TRUE}
+rf.model <- randomForest(factor(classe) ~ ., data=acc_train, ntree=100)
+rf.cv <- rf.crossValidation(rf.model, acc_train, p=0.20, n=5, seed=41, ntree=100)
+print(rf.cv)
+
+```
+
+As seen from the summary of the random forest model on the validation data, the model is very successful and resulted in an accuracy 100% in the cross validation test.
+
+## Prediction on the test data set
+
+```{r}
+test <- read.table("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", sep = ',', header = TRUE)
+test <- tbl_df(test)
+# same feature elimination process as for the training set
+count2 <- sapply(test, fun)
+complete_test <- test[,count2<1]
+acc_ind <- grep("arm|dumbbell|forearm|belt", names(complete_test), value=T)
+acc_test <- select(complete_test, acc_ind)
+
+results <- predict(rf.model, acc_test)
+results
+```
+
+## Appendix: Figures
+
+```{r, echo=FALSE, include=TRUE, fig.path="figures/"}
+
+# plot the error rates of the model
+plot(rf.model, log = 'y')
+legend("topright", legend=unique(acc_train$classe), col=unique(as.numeric(acc_train$classe)), pch=19)
+
+# plot the feature importance
+varImpPlot(rf.model)
+```
+
